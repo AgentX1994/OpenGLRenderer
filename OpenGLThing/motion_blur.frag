@@ -7,19 +7,20 @@
 
 in vec2 tCoords;
 
-uniform sampler2D frame1;
-uniform sampler2D frame2;
-uniform sampler2D frame3;
+const int MAX_FRAMES = 16;
 
-uniform float w1;
-uniform float w2;
-uniform float w3;
+uniform sampler2D frames[MAX_FRAMES];
+uniform float weights[MAX_FRAMES];
+uniform int num_frames;
 
 out vec4 color;
 
 void main(){
-    vec4 c1 = w1 * texture(frame1, tCoords);
-    vec3 c2 = w2 * texture(frame2, tCoords).xyz;
-    vec3 c3 = w3 * texture(frame3, tCoords).xyz;
-    color = vec4(c1.xyz + c2 + c3, c1.a);
+    vec4 sum = vec4(0,0,0,1);
+    float w = 0;
+    for (int i = 0; i < num_frames; i++) {
+        w += weights[i];
+        sum.xyz += weights[i]*texture(frames[i],tCoords).xyz;
+    }
+    color = sum/w;
 }

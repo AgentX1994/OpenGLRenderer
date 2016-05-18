@@ -121,22 +121,31 @@ int main(int argc, const char * argv[]) {
     
     glClearColor(0.25f, 0.25f, 0.25f, 1);
     
-    GLuint frames[3];
+    const int MB_FRAME_COUNT = 16;
     
-    glGenTextures(3, frames);
+    GLuint frames[MB_FRAME_COUNT];
+    
+    glGenTextures(MB_FRAME_COUNT, frames);
     
     int width, height;
     glfwGetFramebufferSize(window, &width, &height);
     glCheckErrors("before viewport");
     glViewport(0, 0, width, height);
     
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < MB_FRAME_COUNT; i++) {
         glBindTexture(GL_TEXTURE_2D, *(frames+i));
         
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    }
+    
+    float weights[MB_FRAME_COUNT];
+    float drop_off = .8;
+    
+    for (int i = 0; i < MB_FRAME_COUNT; i++) {
+        weights[i] = std::pow(drop_off,i+1);
     }
     
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -169,7 +178,7 @@ int main(int argc, const char * argv[]) {
         
         
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, frames[i%3], 0);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, frames[i%MB_FRAME_COUNT], 0);
         
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "ERROR: FRAMEBUFFER NOT COMPLETE" << std::endl;
@@ -217,35 +226,21 @@ int main(int argc, const char * argv[]) {
         
         glCheckErrors("After clear2");
         
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, frames[i%3]);
-        glUniform1i(glGetUniformLocation(mot_blur.getID(), "frame1"), 0);
-        
-        glCheckErrors("After frame1");
-        
-        if(i > 0) {
-            glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, frames[(i-1)%3]);
-            glUniform1i(glGetUniformLocation(mot_blur.getID(), "frame2"), 1);
-        } else {
-            glUniform1i(glGetUniformLocation(mot_blur.getID(), "frame2"), 0);
-            glCheckErrors("in else statement");
+        int j;
+        for (j = MB_FRAME_COUNT; j > std::max(MB_FRAME_COUNT-i,0); j--) {
+            glActiveTexture(GL_TEXTURE0 + (MB_FRAME_COUNT-j));
+            glBindTexture(GL_TEXTURE_2D, frames[(i-MB_FRAME_COUNT+j)%MB_FRAME_COUNT]);
+            glUniform1i(glGetUniformLocation(mot_blur.getID(), "frames")+(MB_FRAME_COUNT-j), MB_FRAME_COUNT-j);
         }
-        glCheckErrors("After frame2");
-        if(i > 1) {
-            glActiveTexture(GL_TEXTURE2);
-            glBindTexture(GL_TEXTURE_2D, frames[(i-2)%3]);
-            glUniform1i(glGetUniformLocation(mot_blur.getID(), "frame3"), 2);
-        } else {
-            glUniform1i(glGetUniformLocation(mot_blur.getID(), "frame3"), 0);
-        }
-        glCheckErrors("After frame3");
         
-        glUniform1f(glGetUniformLocation(mot_blur.getID(), "w1"), 0.7f);
-        glUniform1f(glGetUniformLocation(mot_blur.getID(), "w2"), 0.3f);
-        glUniform1f(glGetUniformLocation(mot_blur.getID(), "w3"), 0.2f);
+        glCheckErrors("After textures iter #" + std::to_string(i) + " j = " + std::to_string(j));
         
-        glCheckErrors("After weights");
+        glUniform1fv(glGetUniformLocation(mot_blur.getID(), "weights"), MB_FRAME_COUNT, weights);
+        glCheckErrors("After Weights");
+        
+        glUniform1i(glGetUniformLocation(mot_blur.getID(), "num_frames"), (MB_FRAME_COUNT - std::max(MB_FRAME_COUNT-i,0)));
+        
+        glCheckErrors("After num_frames");
         
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         
